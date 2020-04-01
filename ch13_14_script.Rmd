@@ -14,30 +14,70 @@ x <- read_rds("ch13_nes.rds")
 
 ```
 
-# Scene 1
-
 **Prompt:** Estimate a new model of `dvote`, this time with two explanatory variables: `race` and `ideology`. Name the model `z_1`. (Like last time, you should treat `ideology` as a continuous variable.) Write down brief answers to the following questions: 
+
+```{r, cache=TRUE}
+z_1 <- stan_glm(data = x, family = binomial, dvote ~ race + ideology, refresh = 0)
+```
 
 * What is the probability that a Black respondent with ideology of 4 (which means "Moderate") votes Democratic? Solve this just by plugging in the estimated parameters from the regression and using `plogis()`, as RAOS does on page 204.
 
+```{r}
+res <- tidy(z_1) %>% 
+  filter(term %in% c("(Intercept)", "ideology")) %>% 
+  pull(estimate)
+plogis(res[1] + res[2] * 4)
+```
+
 * How much less likely is a someone to vote for the Democrat who has ideology 4 compared to someone with ideology 5? Use the divide-by-4 rule, as discussed on page 204.
+
+
+```{r}
+-0.8585977 / 4
+```
 
 * Check the accuracy of the divide-by-4 rule by calculating the probability of voting Democratic by simply tabulating the votes within each income category, like we did with `gender` last week.
 
+```{r}
+x %>% 
+  group_by(ideology) %>% 
+  summarize(dvotes = sum(dvote), all = n()) %>% 
+  mutate(per = dvotes/all)
+```
+
 * The coefficient of raceOther should be around -2.2. Interpret its meaning in the context of someone with a Moderate ideology. Do not use odds ratios.
 
-
+```{r}
+plogis(6.1 - 0.9*4 )
+plogis(6.1 - 2.2 - 0.9*4 )
+```
 
 # Scene 2
 
 **Prompt:** Notice how the intercept of `z_1` makes no sense since `ideology` can not be zero. Always check to see if the questions you are asking --- How to interpret the intercept? --- make sense in the context of your data. As RAOS suggests (pages 173ff), it often makes sense to center the data for just this reason. Estimate a new model, `z_2` which is just like `z_1` except that ideology is centered. Interpret the meaning of the intercept.
 
+```{r, cache=TRUE}
+x <- x %>% 
+  mutate(c_ideology = ideology - 4)
+z_2 <- stan_glm(data = x, family = binomial, dvote ~ race + c_ideology, refresh = 0)
+plogis(2.6)
+```
+
+The new intercept value that we see here is for a hypothetical black person with an average ideology for this data set; somewhere a bit less than 4. 
 
 # Scene 3
 
 **Prompt:** Chapter 14 has an extensive discussion about the use of interactions in logistic models. Estimate a new model, `z_3`, which is just `z_2` and an interaction between `race` and `c_ideology`. See pages 222ff for useful discussion.
 
+```{r cache = TRUE}
+z_3 <- stan_glm(data = x, formula = dvote ~ race + c_ideology + race:c_ideology, family = binomial(link = "logit"), refresh = 0)
+print(z_3, digits = 3)
+```
+
+
 * Interpret the intercept (2.4) of this model. Is that interpretation the same as for model `z_3`? Why or why not?
+
+Should be the same.
 
 * Interpret the coefficient of "raceWhite:c_ideology". Pages 226ff may also be helpful.
 
@@ -48,13 +88,27 @@ x <- read_rds("ch13_nes.rds")
 
 **Prompt:** Let's focus on `z_3`. Use `posterior_linpred()` on `z_3` to create a matrix of estimated probabilities. Consider the 3rd column of this matrix. Create a histogram and explain its meaning. See page 206.
 
+```{r, cache=TRUE}
+mat <- posterior_linpred(z_3, transform = TRUE)
+mat[,3] %>% 
+  as_tibble() %>% 
+  ggplot(aes(value)) +
+    geom_histogram(binwidth = 0.002)
+```
 
+Third column is range of probabilities of voting Democrat for the third person. 
 
 # Scene 5
 
 **Prompt:** Use `posterior_predict()` on `z_3` to create a matrix of predictions. Create a histogram and explain its meaning. When might it be useful to use this? See pages 136-137 for a concrete example of the use of predictive simulations.
 
-
+```{r, cache=TRUE}
+mat <- posterior_predict(z_3, transform = TRUE)
+mat[,3] %>% 
+  as_tibble() %>% 
+  ggplot(aes(value)) +
+    geom_histogram(binwidth = 0.002)
+```
 
 # Scene 6
 
